@@ -16,7 +16,7 @@ import Moya
 public typealias Properties = [String: Encodable]
 
 enum ActivityEndpoint<T: ActivityProtocol> {
-    case getByIds(_ enrich: Bool, _ activitiesIds: [String])
+    case getByIds(_ enrich: Bool, _ activitiesIds: [String], _ reactionsOptions: ActivityReactionsOptions)
     case get(_ enrich: Bool, foreignIds: [String], times: [Date])
     case update(_ activities: [T])
     case updateActivityById(setProperties: Properties?, unsetPropertiesNames: [String]?, activityId: String)
@@ -27,7 +27,7 @@ extension ActivityEndpoint: StreamTargetType {
     
     var path: String {
         switch self {
-        case .getByIds(let enrich, _), .get(let enrich, _, _):
+        case .getByIds(let enrich, _, _), .get(let enrich, _, _):
             return "\(enrich ? "enrich/" : "")activities/"
         case .update:
             return "activities/"
@@ -48,9 +48,28 @@ extension ActivityEndpoint: StreamTargetType {
     
     var task: Task {
         switch self {
-        case .getByIds(_, let ids):
+        case .getByIds(_, let ids, let reactionsOptions):
             let ids = ids.map { $0 }.joined(separator: ",")
-            return .requestParameters(parameters: ["ids" : ids], encoding: URLEncoding.default)
+
+            var parameters: [String: Any] = ["ids" : ids]
+
+            if reactionsOptions.contains(.own) {
+                parameters["withOwnReactions"] = true
+            }
+
+            if reactionsOptions.contains(.ownChildren) {
+                parameters["withOwnChildren"] = true
+            }
+
+            if reactionsOptions.contains(.latest) {
+                parameters["withRecentReactions"] = true
+            }
+
+            if reactionsOptions.contains(.counts) {
+                parameters["withReactionCounts"] = true
+            }
+
+            return .requestParameters(parameters: parameters, encoding: URLEncoding.default)
             
         case let .get(_, foreignIds: foreignIds, times: times):
             return .requestParameters(parameters: idParameters(with: foreignIds, times: times), encoding: URLEncoding.default)
@@ -72,7 +91,7 @@ extension ActivityEndpoint: StreamTargetType {
     
     var sampleJSON: String {
         switch self {
-        case let .getByIds(enrich, activitiesIds):
+        case let .getByIds(enrich, activitiesIds, _):
             let actorJSON = enrich
                 ? "{\"id\":\"eric\",\"data\":{\"name\":\"Eric\"},\"updated_at\":\"2019-04-15T17:55:53.425\",\"created_at\":\"2019-04-15T17:55:53.425\"}"
                 : "\"eric\""
@@ -186,4 +205,31 @@ extension ActivityEndpoint {
         let times = times.map { $0.stream }.joined(separator: ",")
         return ["foreign_ids": foreignIds, "timestamps": times]
     }
+}
+
+// MARK: - Reactions Options
+
+/// Reaction options to include reactions to activities.
+/// - Available options:
+///     - `includeOwn`: include reactions added by current user to all activities.
+///     - `includeOwnChildren`: include reactions added by current user to all reactions.
+///     - `includeRecent`: include recent reactions to activities.
+///     - `includeCounts`: include reaction counts to activities.
+public struct ActivityReactionsOptions: OptionSet {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    /// Include reactions added by current user to all activities.
+    public static let own = ActivityReactionsOptions(rawValue: 1 << 0)
+    /// Include reactions added by current user to all reactions.
+    public static let ownChildren = ActivityReactionsOptions(rawValue: 1 << 1)
+    /// Include recent reactions to activities.
+    public static let latest = ActivityReactionsOptions(rawValue: 1 << 2)
+    /// Include reaction counts to activities.
+    public static let counts = ActivityReactionsOptions(rawValue: 1 << 3)
+    /// Include all reactions options to activities.
+    public static let all: ActivityReactionsOptions = [.own, .ownChildren, .latest, .counts]
 }

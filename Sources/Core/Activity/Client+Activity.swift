@@ -24,8 +24,9 @@ extension Client {
     public func get<T: ActivityProtocol>(enrich: Bool = true,
                                          typeOf type: T.Type,
                                          activityIds: [String],
+                                         includeReactions reactionsOptions: ActivityReactionsOptions = [],
                                          completion: @escaping ActivitiesCompletion<T>) -> Cancellable {
-        return request(endpoint: ActivityEndpoint<T>.getByIds(enrich, activityIds)) { [weak self] result in
+        return request(endpoint: ActivityEndpoint<T>.getByIds(enrich, activityIds, reactionsOptions)) { [weak self] result in
             if let self = self {
                 result.parse(self.callbackQueue, completion)
             }
