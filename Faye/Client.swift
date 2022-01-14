@@ -15,14 +15,15 @@ public typealias ClientWriteDataCompletion = () -> Void
 public final class Client {
     public static var logsEnabled = false
     
-    private static let maxAttemptsToReconnect = 5
+    private static let maxAttemptsToReconnect = 10
     
     private let webSocket: WebSocket
     private var weakChannels = [WeakChannel]()
     private var attemptsToReconnect: Int = 0
     private var clientId: String?
     private var advice: Advice?
-    
+
+    private var isConnecting = false
     private var isWebSocketConnected = false
     
     private lazy var handshakeTimer = RepeatingTimer(timeInterval: .seconds(30), queue: webSocket.callbackQueue) { [weak self] in
@@ -92,9 +93,11 @@ extension Client {
 
 extension Client {
     public func connect() {
-        guard !isConnected else {
+        guard !isConnected, !isConnecting else {
             return
         }
+
+        isConnecting = true
         
         log("Connecting WS...")
         self.webSocket.connect()
@@ -142,6 +145,8 @@ extension Client {
 
 extension Client: WebSocketDelegate {
     public func didReceive(event: WebSocketEvent, client: WebSocket) {
+        isConnecting = false
+
         switch event {
         case .connected(let headers):
             isWebSocketConnected = true
@@ -183,9 +188,13 @@ extension Client: WebSocketDelegate {
         case .cancelled:
             isWebSocketConnected = false
             log("❌ WS Disconnect: CANCELLED")
+            attemptsToReconnect = 0
+            applyAdvice()
         case .error(let error):
             isWebSocketConnected = false
             log("❌ WS Disconnect with error: \(error)")
+            attemptsToReconnect = 0
+            applyAdvice()
             //handleError(error)
         }
     }
@@ -281,6 +290,12 @@ extension Client {
 
 extension Client {
     public func ping() {
+        if !isWebSocketConnected {
+            attemptsToReconnect = 0
+            applyAdvice()
+            return
+        }
+
         log("🏓 --->")
         webSocket.write(ping: Data())
     }
