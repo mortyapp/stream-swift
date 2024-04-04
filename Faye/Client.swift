@@ -144,7 +144,7 @@ extension Client {
 // MARK: - Connection
 
 extension Client: WebSocketDelegate {
-    public func didReceive(event: WebSocketEvent, client: WebSocket) {
+    public func didReceive(event: Starscream.WebSocketEvent, client: any Starscream.WebSocketClient) {
         isConnecting = false
 
         switch event {
@@ -188,6 +188,11 @@ extension Client: WebSocketDelegate {
         case .cancelled:
             isWebSocketConnected = false
             log("❌ WS Disconnect: CANCELLED")
+            attemptsToReconnect = 0
+            applyAdvice()
+        case .peerClosed:
+            isWebSocketConnected = false
+            log("❌ WS Disconnect: PEER CLOSED")
             attemptsToReconnect = 0
             applyAdvice()
         case .error(let error):
